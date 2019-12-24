@@ -63,28 +63,38 @@ class ScreenshotCommand extends FlutterCommand {
 
   Device device;
 
+  static void validateOptions(String screenshotType, Device device, String observatoryUri) {
+    switch (screenshotType) {
+      case _kDeviceType:
+        if (device == null) {
+          throwToolExit('Must have a connected device for screenshot type $screenshotType');
+        }
+        if (!device.supportsScreenshot) {
+          throwToolExit('Screenshot not supported for ${device.name}.');
+        }
+        break;
+      default:
+        if (observatoryUri == null) {
+          throwToolExit('Observatory URI must be specified for screenshot type $screenshotType');
+        }
+    }
+  }
+
   @override
   Future<FlutterCommandResult> verifyThenRunCommand(String commandPath) async {
     device = await findTargetDevice();
-    if (device == null) {
-      throwToolExit('Must have a connected device');
-    }
-    if (argResults[_kType] == _kDeviceType && !device.supportsScreenshot) {
-      throwToolExit('Screenshot not supported for ${device.name}.');
-    }
-    if (argResults[_kType] != _kDeviceType && argResults[_kObservatoryUri] == null) {
-      throwToolExit('Observatory URI must be specified for screenshot type ${argResults[_kType]}');
-    }
+    validateOptions(stringArg(_kType), device, stringArg(_kObservatoryUri));
     return super.verifyThenRunCommand(commandPath);
   }
 
   @override
   Future<FlutterCommandResult> runCommand() async {
     File outputFile;
-    if (argResults.wasParsed(_kOut))
-      outputFile = fs.file(argResults[_kOut]);
+    if (argResults.wasParsed(_kOut)) {
+      outputFile = fs.file(stringArg(_kOut));
+    }
 
-    switch (argResults[_kType]) {
+    switch (stringArg(_kType)) {
       case _kDeviceType:
         await runScreenshot(outputFile);
         return null;
@@ -106,47 +116,49 @@ class ScreenshotCommand extends FlutterCommand {
     } catch (error) {
       throwToolExit('Error taking screenshot: $error');
     }
-    await showOutputFileInfo(outputFile);
+    _showOutputFileInfo(outputFile);
   }
 
   Future<void> runSkia(File outputFile) async {
     final Map<String, dynamic> skp = await _invokeVmServiceRpc('_flutter.screenshotSkp');
     outputFile ??= getUniqueFile(fs.currentDirectory, 'flutter', 'skp');
     final IOSink sink = outputFile.openWrite();
-    sink.add(base64.decode(skp['skp']));
+    sink.add(base64.decode(skp['skp'] as String));
     await sink.close();
-    await showOutputFileInfo(outputFile);
-    await _ensureOutputIsNotJsonRpcError(outputFile);
+    _showOutputFileInfo(outputFile);
+    _ensureOutputIsNotJsonRpcError(outputFile);
   }
 
   Future<void> runRasterizer(File outputFile) async {
     final Map<String, dynamic> response = await _invokeVmServiceRpc('_flutter.screenshot');
     outputFile ??= getUniqueFile(fs.currentDirectory, 'flutter', 'png');
     final IOSink sink = outputFile.openWrite();
-    sink.add(base64.decode(response['screenshot']));
+    sink.add(base64.decode(response['screenshot'] as String));
     await sink.close();
-    await showOutputFileInfo(outputFile);
-    await _ensureOutputIsNotJsonRpcError(outputFile);
+    _showOutputFileInfo(outputFile);
+    _ensureOutputIsNotJsonRpcError(outputFile);
   }
 
   Future<Map<String, dynamic>> _invokeVmServiceRpc(String method) async {
-    final Uri observatoryUri = Uri.parse(argResults[_kObservatoryUri]);
+    final Uri observatoryUri = Uri.parse(stringArg(_kObservatoryUri));
     final VMService vmService = await VMService.connect(observatoryUri);
     return await vmService.vm.invokeRpcRaw(method);
   }
 
-  Future<void> _ensureOutputIsNotJsonRpcError(File outputFile) async {
-    if (await outputFile.length() < 1000) {
-      final String content = await outputFile.readAsString(
-        encoding: const AsciiCodec(allowInvalid: true),
-      );
-      if (content.startsWith('{"jsonrpc":"2.0", "error"'))
-        throwToolExit('\nIt appears the output file contains an error message, not valid skia output.');
+  void _ensureOutputIsNotJsonRpcError(File outputFile) {
+    if (outputFile.lengthSync() >= 1000) {
+      return;
+    }
+    final String content = outputFile.readAsStringSync(
+      encoding: const AsciiCodec(allowInvalid: true),
+    );
+    if (content.startsWith('{"jsonrpc":"2.0", "error"')) {
+      throwToolExit('It appears the output file contains an error message, not valid skia output.');
     }
   }
 
-  Future<void> showOutputFileInfo(File outputFile) async {
-    final int sizeKB = (await outputFile.length()) ~/ 1024;
+  void _showOutputFileInfo(File outputFile) {
+    final int sizeKB = (outputFile.lengthSync()) ~/ 1024;
     printStatus('Screenshot written to ${fs.path.relative(outputFile.path)} (${sizeKB}kB).');
   }
 }

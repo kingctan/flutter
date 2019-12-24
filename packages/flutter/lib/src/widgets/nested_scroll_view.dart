@@ -266,7 +266,7 @@ class NestedScrollView extends StatefulWidget {
   /// For sample code showing how to use this method, see the [NestedScrollView]
   /// documentation.
   static SliverOverlapAbsorberHandle sliverOverlapAbsorberHandleFor(BuildContext context) {
-    final _InheritedNestedScrollView target = context.inheritFromWidgetOfExactType(_InheritedNestedScrollView);
+    final _InheritedNestedScrollView target = context.dependOnInheritedWidgetOfExactType<_InheritedNestedScrollView>();
     assert(target != null, 'NestedScrollView.sliverOverlapAbsorberHandleFor must be called with a context that contains a NestedScrollView.');
     return target.state._absorberHandle;
   }
@@ -498,13 +498,8 @@ class _NestedScrollCoordinator implements ScrollActivityDelegate, ScrollHoldCont
 
   bool get hasScrolledBody {
     for (_NestedScrollPosition position in _innerPositions) {
-      // TODO(chunhtai): Replace null check with assert once
-      // https://github.com/flutter/flutter/issues/31195 is fixed.
-      if (
-        position.minScrollExtent != null &&
-        position.pixels != null &&
-        position.pixels > position.minScrollExtent
-      ) {
+      assert(position.minScrollExtent != null && position.pixels != null);
+      if (position.pixels > position.minScrollExtent) {
         return true;
       }
     }

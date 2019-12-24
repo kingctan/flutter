@@ -4,7 +4,7 @@
 
 import 'dart:async';
 
-import 'dart:ui' as ui show ImageFilter, Gradient, Image;
+import 'dart:ui' as ui show ImageFilter, Gradient, Image, Color;
 
 import 'package:flutter/animation.dart';
 import 'package:flutter/foundation.dart';
@@ -456,13 +456,15 @@ class RenderAspectRatio extends RenderProxyBox {
     assert(constraints.debugAssertIsValid());
     assert(() {
       if (!constraints.hasBoundedWidth && !constraints.hasBoundedHeight) {
-        throw FlutterError(
-          '$runtimeType has unbounded constraints.\n'
-          'This $runtimeType was given an aspect ratio of $aspectRatio but was given '
-          'both unbounded width and unbounded height constraints. Because both '
-          'constraints were unbounded, this render object doesn\'t know how much '
-          'size to consume.'
-        );
+        throw FlutterError.fromParts(<DiagnosticsNode>[
+          ErrorSummary('$runtimeType has unbounded constraints.'),
+          ErrorDescription(
+            'This $runtimeType was given an aspect ratio of $aspectRatio but was given '
+            'both unbounded width and unbounded height constraints. Because both '
+            'constraints were unbounded, this render object doesn\'t know how much '
+            'size to consume.'
+          )
+        ]);
       }
       return true;
     }());
@@ -711,8 +713,6 @@ class RenderIntrinsicHeight extends RenderProxyBox {
 
 }
 
-int _getAlphaFromOpacity(double opacity) => (opacity * 255).round();
-
 /// Makes its child partially transparent.
 ///
 /// This class paints its child into an intermediate buffer and then blends the
@@ -735,7 +735,7 @@ class RenderOpacity extends RenderProxyBox {
        assert(alwaysIncludeSemantics != null),
        _opacity = opacity,
        _alwaysIncludeSemantics = alwaysIncludeSemantics,
-       _alpha = _getAlphaFromOpacity(opacity),
+       _alpha = ui.Color.getAlphaFromOpacity(opacity),
        super(child);
 
   @override
@@ -763,11 +763,11 @@ class RenderOpacity extends RenderProxyBox {
     final bool didNeedCompositing = alwaysNeedsCompositing;
     final bool wasVisible = _alpha != 0;
     _opacity = value;
-    _alpha = _getAlphaFromOpacity(_opacity);
+    _alpha = ui.Color.getAlphaFromOpacity(_opacity);
     if (didNeedCompositing != alwaysNeedsCompositing)
       markNeedsCompositingBitsUpdate();
     markNeedsPaint();
-    if (wasVisible != (_alpha != 0))
+    if (wasVisible != (_alpha != 0) && !alwaysIncludeSemantics)
       markNeedsSemanticsUpdate();
   }
 
@@ -893,7 +893,7 @@ class RenderAnimatedOpacity extends RenderProxyBox {
 
   void _updateOpacity() {
     final int oldAlpha = _alpha;
-    _alpha = _getAlphaFromOpacity(_opacity.value.clamp(0.0, 1.0));
+    _alpha = ui.Color.getAlphaFromOpacity(_opacity.value);
     if (oldAlpha != _alpha) {
       final bool didNeedCompositing = _currentlyNeedsCompositing;
       _currentlyNeedsCompositing = _alpha > 0 && _alpha < 255;
@@ -1285,12 +1285,14 @@ class RenderClipRect extends _RenderCustomClip<Rect> {
   /// If [clipper] is null, the clip will match the layout size and position of
   /// the child.
   ///
-  /// The [clipBehavior] cannot be [Clip.none].
+  /// The [clipBehavior] must not be null or [Clip.none].
   RenderClipRect({
     RenderBox child,
     CustomClipper<Rect> clipper,
     Clip clipBehavior = Clip.antiAlias,
-  }) : super(child: child, clipper: clipper, clipBehavior: clipBehavior);
+  }) : assert(clipBehavior != null),
+       assert(clipBehavior != Clip.none),
+       super(child: child, clipper: clipper, clipBehavior: clipBehavior);
 
   @override
   Rect get _defaultClip => Offset.zero & size;
@@ -1342,13 +1344,14 @@ class RenderClipRRect extends _RenderCustomClip<RRect> {
   ///
   /// If [clipper] is non-null, then [borderRadius] is ignored.
   ///
-  /// The [clipBehavior] cannot be [Clip.none].
+  /// The [clipBehavior] argument must not be null or [Clip.none].
   RenderClipRRect({
     RenderBox child,
     BorderRadius borderRadius = BorderRadius.zero,
     CustomClipper<RRect> clipper,
     Clip clipBehavior = Clip.antiAlias,
-  }) : assert(clipBehavior != Clip.none),
+  }) : assert(clipBehavior != null),
+       assert(clipBehavior != Clip.none),
        _borderRadius = borderRadius,
        super(child: child, clipper: clipper, clipBehavior: clipBehavior) {
     assert(_borderRadius != null || clipper != null);
@@ -1418,12 +1421,13 @@ class RenderClipOval extends _RenderCustomClip<Rect> {
   /// If [clipper] is null, the oval will be inscribed into the layout size and
   /// position of the child.
   ///
-  /// The [clipBehavior] cannot be [Clip.none].
+  /// The [clipBehavior] argument must not be null or [Clip.none].
   RenderClipOval({
     RenderBox child,
     CustomClipper<Rect> clipper,
     Clip clipBehavior = Clip.antiAlias,
-  }) : assert(clipBehavior != Clip.none),
+  }) : assert(clipBehavior != null),
+       assert(clipBehavior != Clip.none),
        super(child: child, clipper: clipper, clipBehavior: clipBehavior);
 
   Rect _cachedRect;
@@ -1496,12 +1500,13 @@ class RenderClipPath extends _RenderCustomClip<Path> {
   /// consider using a [RenderClipRect], which can achieve the same effect more
   /// efficiently.
   ///
-  /// The [clipBehavior] cannot be [Clip.none].
+  /// The [clipBehavior] argument must not be null or [Clip.none].
   RenderClipPath({
     RenderBox child,
     CustomClipper<Path> clipper,
     Clip clipBehavior = Clip.antiAlias,
-  }) : assert(clipBehavior != Clip.none),
+  }) : assert(clipBehavior != null),
+       assert(clipBehavior != Clip.none),
        super(child: child, clipper: clipper, clipBehavior: clipBehavior);
 
   @override
@@ -1632,8 +1637,9 @@ class RenderPhysicalModel extends _RenderPhysicalModelBase<RRect> {
   ///
   /// The [color] is required.
   ///
-  /// The [shape], [elevation], [color], and [shadowColor] must not be null.
-  /// Additionally, the [elevation] must be non-negative.
+  /// The [shape], [elevation], [color], [clipBehavior], and [shadowColor]
+  /// arguments must not be null. Additionally, the [elevation] must be
+  /// non-negative.
   RenderPhysicalModel({
     RenderBox child,
     BoxShape shape = BoxShape.rectangle,
@@ -1654,7 +1660,7 @@ class RenderPhysicalModel extends _RenderPhysicalModelBase<RRect> {
          child: child,
          elevation: elevation,
          color: color,
-         shadowColor: shadowColor
+         shadowColor: shadowColor,
        );
 
   @override
@@ -1796,7 +1802,7 @@ class RenderPhysicalShape extends _RenderPhysicalModelBase<Path> {
          color: color,
          shadowColor: shadowColor,
          clipper: clipper,
-         clipBehavior: clipBehavior
+         clipBehavior: clipBehavior,
        );
 
   @override
@@ -1970,16 +1976,16 @@ class RenderDecoratedBox extends RenderProxyBox {
       _painter.paint(context.canvas, offset, filledConfiguration);
       assert(() {
         if (debugSaveCount != context.canvas.getSaveCount()) {
-          throw FlutterError(
-            '${_decoration.runtimeType} painter had mismatching save and restore calls.\n'
-            'Before painting the decoration, the canvas save count was $debugSaveCount. '
-            'After painting it, the canvas save count was ${context.canvas.getSaveCount()}. '
-            'Every call to save() or saveLayer() must be matched by a call to restore().\n'
-            'The decoration was:\n'
-            '  $decoration\n'
-            'The painter was:\n'
-            '  $_painter'
-          );
+          throw FlutterError.fromParts(<DiagnosticsNode>[
+            ErrorSummary('${_decoration.runtimeType} painter had mismatching save and restore calls.'),
+            ErrorDescription(
+              'Before painting the decoration, the canvas save count was $debugSaveCount. '
+              'After painting it, the canvas save count was ${context.canvas.getSaveCount()}. '
+              'Every call to save() or saveLayer() must be matched by a call to restore().'
+            ),
+            DiagnosticsProperty<Decoration>('The decoration was', decoration, style: DiagnosticsTreeStyle.errorProperty),
+            DiagnosticsProperty<BoxPainter>('The painter was', _painter, style: DiagnosticsTreeStyle.errorProperty),
+          ]);
         }
         return true;
       }());
@@ -2569,28 +2575,25 @@ class RenderPointerListener extends RenderProxyBoxWithHitTestBehavior {
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
     super.debugFillProperties(properties);
-    final List<String> listeners = <String>[];
-    if (onPointerDown != null)
-      listeners.add('down');
-    if (onPointerMove != null)
-      listeners.add('move');
-    if (onPointerUp != null)
-      listeners.add('up');
-    if (onPointerCancel != null)
-      listeners.add('cancel');
-    if (onPointerSignal != null)
-      listeners.add('signal');
-    if (listeners.isEmpty)
-      listeners.add('<none>');
-    properties.add(IterableProperty<String>('listeners', listeners));
-    // TODO(jacobr): add raw listeners to the diagnostics data.
+    properties.add(FlagsSummary<Function>(
+      'listeners',
+      <String, Function>{
+        'down': onPointerDown,
+        'move': onPointerMove,
+        'up': onPointerUp,
+        'cancel': onPointerCancel,
+        'signal': onPointerSignal,
+      },
+      ifEmpty: '<none>',
+    ));
   }
 }
 
 /// Calls callbacks in response to pointer events that are exclusive to mice.
 ///
-/// Simply put, it responds to events that are related to hovering,
-/// i.e. when the mouse enters, exits or hovers a region without pressing.
+/// It responds to events that are related to hovering, i.e. when the mouse
+/// enters, exits (with or without pressing buttons), or moves over a region
+/// without pressing buttons.
 ///
 /// It does not respond to common events that construct gestures, such as when
 /// the pointer is pressed, moved, then released or canceled. For these events,
@@ -2599,16 +2602,24 @@ class RenderPointerListener extends RenderProxyBoxWithHitTestBehavior {
 /// If it has a child, it defers to the child for sizing behavior.
 ///
 /// If it does not have a child, it grows to fit the parent-provided constraints.
+///
+/// See also:
+///
+///  * [MouseRegion], a widget that listens to hover events using
+///    [RenderMouseRegion].
 class RenderMouseRegion extends RenderProxyBox {
   /// Creates a render object that forwards pointer events to callbacks.
   RenderMouseRegion({
     PointerEnterEventListener onEnter,
     PointerHoverEventListener onHover,
     PointerExitEventListener onExit,
+    bool opaque = true,
     RenderBox child,
-  }) : _onEnter = onEnter,
+  }) : assert(opaque != null),
+       _onEnter = onEnter,
        _onHover = onHover,
        _onExit = onExit,
+       _opaque = opaque,
        _annotationIsActive = false,
        super(child) {
     _hoverAnnotation = MouseTrackerAnnotation(
@@ -2618,10 +2629,31 @@ class RenderMouseRegion extends RenderProxyBox {
     );
   }
 
-  /// Called when a hovering pointer enters the region for this widget.
+  /// Whether this object should prevent [RenderMouseRegion]s visually behind it
+  /// from detecting the pointer, thus affecting how their [onHover], [onEnter],
+  /// and [onExit] behave.
   ///
-  /// If this is a mouse pointer, this will fire when the mouse pointer enters
-  /// the region defined by this widget.
+  /// If [opaque] is true, this object will absorb the mouse pointer and
+  /// prevent this object's siblings (or any other objects that are not
+  /// ancestors or descendants of this object) from detecting the mouse
+  /// pointer even when the pointer is within their areas.
+  ///
+  /// If [opaque] is false, this object will not affect how [RenderMouseRegion]s
+  /// behind it behave, which will detect the mouse pointer as long as the
+  /// pointer is within their areas.
+  ///
+  /// This defaults to true.
+  bool get opaque => _opaque;
+  bool _opaque;
+  set opaque(bool value) {
+    if (_opaque != value) {
+      _opaque = value;
+      _updateAnnotations();
+    }
+  }
+
+  /// Called when a mouse pointer enters the region (with or without buttons
+  /// pressed).
   PointerEnterEventListener get onEnter => _onEnter;
   set onEnter(PointerEnterEventListener value) {
     if (_onEnter != value) {
@@ -2635,10 +2667,8 @@ class RenderMouseRegion extends RenderProxyBox {
       _onEnter(event);
   }
 
-  /// Called when a pointer that has not triggered an [onPointerDown] changes
-  /// position.
-  ///
-  /// Typically only triggered for mouse pointers.
+  /// Called when a pointer changes position without buttons pressed and the end
+  /// position is within the region.
   PointerHoverEventListener get onHover => _onHover;
   set onHover(PointerHoverEventListener value) {
     if (_onHover != value) {
@@ -2652,10 +2682,7 @@ class RenderMouseRegion extends RenderProxyBox {
       _onHover(event);
   }
 
-  /// Called when a hovering pointer leaves the region for this widget.
-  ///
-  /// If this is a mouse pointer, this will fire when the mouse pointer leaves
-  /// the region defined by this widget.
+  /// Called when a pointer leaves the region (with or without buttons pressed).
   PointerExitEventListener get onExit => _onExit;
   set onExit(PointerExitEventListener value) {
     if (_onExit != value) {
@@ -2684,7 +2711,8 @@ class RenderMouseRegion extends RenderProxyBox {
     final bool annotationWillBeActive = (
         _onEnter != null ||
         _onHover != null ||
-        _onExit != null
+        _onExit != null ||
+        opaque
       ) &&
       RendererBinding.instance.mouseTracker.mouseIsConnected;
     if (annotationWasActive != annotationWillBeActive) {
@@ -2752,6 +2780,7 @@ class RenderMouseRegion extends RenderProxyBox {
         _hoverAnnotation,
         size: size,
         offset: offset,
+        opaque: opaque,
       );
       context.pushLayer(layer, super.paint, offset);
     } else {
@@ -2767,17 +2796,16 @@ class RenderMouseRegion extends RenderProxyBox {
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
     super.debugFillProperties(properties);
-    final List<String> listeners = <String>[];
-    if (onEnter != null)
-      listeners.add('enter');
-    if (onHover != null)
-      listeners.add('hover');
-    if (onExit != null)
-      listeners.add('exit');
-    if (listeners.isEmpty)
-      listeners.add('<none>');
-    properties.add(IterableProperty<String>('listeners', listeners));
-    // TODO(jacobr): add raw listeners to the diagnostics data.
+    properties.add(FlagsSummary<Function>(
+      'listeners',
+      <String, Function>{
+        'enter': onEnter,
+        'hover': onHover,
+        'exit': onExit,
+      },
+      ifEmpty: '<none>',
+    ));
+    properties.add(DiagnosticsProperty<bool>('opaque', opaque, defaultValue: true));
   }
 }
 
@@ -2986,8 +3014,8 @@ class RenderRepaintBoundary extends RenderProxyBox {
 class RenderIgnorePointer extends RenderProxyBox {
   /// Creates a render object that is invisible to hit testing.
   ///
-  /// The [ignoring] argument must not be null. If [ignoringSemantics], this
-  /// render object will be ignored for semantics if [ignoring] is true.
+  /// The [ignoring] argument must not be null. If [ignoringSemantics] is null,
+  /// this render object will be ignored for semantics if [ignoring] is true.
   RenderIgnorePointer({
     RenderBox child,
     bool ignoring = true,
@@ -3009,7 +3037,7 @@ class RenderIgnorePointer extends RenderProxyBox {
     if (value == _ignoring)
       return;
     _ignoring = value;
-    if (ignoringSemantics == null)
+    if (_ignoringSemantics == null || !_ignoringSemantics)
       markNeedsSemanticsUpdate();
   }
 
@@ -3054,7 +3082,7 @@ class RenderIgnorePointer extends RenderProxyBox {
         'ignoringSemantics',
         _effectiveIgnoringSemantics,
         description: ignoringSemantics == null ? 'implicitly $_effectiveIgnoringSemantics' : null,
-      )
+      ),
     );
   }
 }
@@ -3456,15 +3484,12 @@ class RenderSemanticsGestureHandler extends RenderProxyBox {
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
     super.debugFillProperties(properties);
-    final List<String> gestures = <String>[];
-    if (onTap != null)
-      gestures.add('tap');
-    if (onLongPress != null)
-      gestures.add('long press');
-    if (onHorizontalDragUpdate != null)
-      gestures.add('horizontal scroll');
-    if (onVerticalDragUpdate != null)
-      gestures.add('vertical scroll');
+    final List<String> gestures = <String>[
+      if (onTap != null) 'tap',
+      if (onLongPress != null) 'long press',
+      if (onHorizontalDragUpdate != null) 'horizontal scroll',
+      if (onVerticalDragUpdate != null) 'vertical scroll',
+    ];
     if (gestures.isEmpty)
       gestures.add('<none>');
     properties.add(IterableProperty<String>('gestures', gestures));
@@ -3488,9 +3513,11 @@ class RenderSemanticsAnnotations extends RenderProxyBox {
     bool toggled,
     bool selected,
     bool button,
+    bool link,
     bool header,
     bool textField,
     bool readOnly,
+    bool focusable,
     bool focused,
     bool inMutuallyExclusiveGroup,
     bool obscured,
@@ -3500,6 +3527,8 @@ class RenderSemanticsAnnotations extends RenderProxyBox {
     bool hidden,
     bool image,
     bool liveRegion,
+    int maxValueLength,
+    int currentValueLength,
     String label,
     String value,
     String increasedValue,
@@ -3537,9 +3566,11 @@ class RenderSemanticsAnnotations extends RenderProxyBox {
        _toggled = toggled,
        _selected = selected,
        _button = button,
+       _link = link,
        _header = header,
        _textField = textField,
        _readOnly = readOnly,
+       _focusable = focusable,
        _focused = focused,
        _inMutuallyExclusiveGroup = inMutuallyExclusiveGroup,
        _obscured = obscured,
@@ -3547,6 +3578,8 @@ class RenderSemanticsAnnotations extends RenderProxyBox {
        _scopesRoute = scopesRoute,
        _namesRoute = namesRoute,
        _liveRegion = liveRegion,
+       _maxValueLength = maxValueLength,
+       _currentValueLength = currentValueLength,
        _hidden = hidden,
        _image = image,
        _onDismiss = onDismiss,
@@ -3677,6 +3710,16 @@ class RenderSemanticsAnnotations extends RenderProxyBox {
     markNeedsSemanticsUpdate();
   }
 
+  /// If non-null, sets the [SemanticsNode.isLink] semantic to the given value.
+  bool get link => _link;
+  bool _link;
+  set link(bool value) {
+    if (link == value)
+      return;
+    _link = value;
+    markNeedsSemanticsUpdate();
+  }
+
   /// If non-null, sets the [SemanticsNode.isHeader] semantic to the given value.
   bool get header => _header;
   bool _header;
@@ -3704,6 +3747,16 @@ class RenderSemanticsAnnotations extends RenderProxyBox {
     if (readOnly == value)
       return;
     _readOnly = value;
+    markNeedsSemanticsUpdate();
+  }
+
+  /// If non-null, sets the [SemanticsNode.isFocusable] semantic to the given value.
+  bool get focusable => _focusable;
+  bool _focusable;
+  set focusable(bool value) {
+    if (focusable == value)
+      return;
+    _focusable = value;
     markNeedsSemanticsUpdate();
   }
 
@@ -3799,6 +3852,28 @@ class RenderSemanticsAnnotations extends RenderProxyBox {
     if (_liveRegion == value)
       return;
     _liveRegion = value;
+    markNeedsSemanticsUpdate();
+  }
+
+  /// If non-null, sets the [SemanticsNode.maxValueLength] semantic to the given
+  /// value.
+  int get maxValueLength => _maxValueLength;
+  int _maxValueLength;
+  set maxValueLength(int value) {
+    if (_maxValueLength == value)
+      return;
+    _maxValueLength = value;
+    markNeedsSemanticsUpdate();
+  }
+
+  /// If non-null, sets the [SemanticsNode.currentValueLength] semantic to the
+  /// given value.
+  int get currentValueLength => _currentValueLength;
+  int _currentValueLength;
+  set currentValueLength(int value) {
+    if (_currentValueLength == value)
+      return;
+    _currentValueLength = value;
     markNeedsSemanticsUpdate();
   }
 
@@ -4337,12 +4412,16 @@ class RenderSemanticsAnnotations extends RenderProxyBox {
       config.isSelected = selected;
     if (button != null)
       config.isButton = button;
+    if (link != null)
+      config.isLink = link;
     if (header != null)
       config.isHeader = header;
     if (textField != null)
       config.isTextField = textField;
     if (readOnly != null)
       config.isReadOnly = readOnly;
+    if (focusable != null)
+      config.isFocusable = focusable;
     if (focused != null)
       config.isFocused = focused;
     if (inMutuallyExclusiveGroup != null)
@@ -4373,6 +4452,12 @@ class RenderSemanticsAnnotations extends RenderProxyBox {
       config.namesRoute = namesRoute;
     if (liveRegion != null)
       config.liveRegion = liveRegion;
+    if (maxValueLength != null) {
+      config.maxValueLength = maxValueLength;
+    }
+    if (currentValueLength != null) {
+      config.currentValueLength = currentValueLength;
+    }
     if (textDirection != null)
       config.textDirection = textDirection;
     if (sortKey != null)

@@ -11,7 +11,6 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter/gestures.dart' show DragStartBehavior;
 
 import 'button_bar.dart';
-import 'button_theme.dart';
 import 'colors.dart';
 import 'debug.dart';
 import 'dialog.dart';
@@ -986,19 +985,17 @@ class _DatePickerDialogState extends State<_DatePickerDialog> {
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     final Widget picker = _buildPicker();
-    final Widget actions = ButtonTheme.bar(
-      child: ButtonBar(
-        children: <Widget>[
-          FlatButton(
-            child: Text(localizations.cancelButtonLabel),
-            onPressed: _handleCancel,
-          ),
-          FlatButton(
-            child: Text(localizations.okButtonLabel),
-            onPressed: _handleOk,
-          ),
-        ],
-      ),
+    final Widget actions = ButtonBar(
+      children: <Widget>[
+        FlatButton(
+          child: Text(localizations.cancelButtonLabel),
+          onPressed: _handleCancel,
+        ),
+        FlatButton(
+          child: Text(localizations.okButtonLabel),
+          onPressed: _handleOk,
+        ),
+      ],
     );
 
     final Dialog dialog = Dialog(
@@ -1040,7 +1037,7 @@ class _DatePickerDialogState extends State<_DatePickerDialog> {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: <Widget>[
                           Flexible(child: picker),
-                          actions
+                          actions,
                         ],
                       ),
                     ),
@@ -1088,8 +1085,8 @@ typedef SelectableDayPredicate = bool Function(DateTime day);
 /// provided by [Directionality]. If both [locale] and [textDirection] are not
 /// null, [textDirection] overrides the direction chosen for the [locale].
 ///
-/// The [context] argument is passed to [showDialog], the documentation for
-/// which discusses how it is used.
+/// The [context] and [useRootNavigator] arguments are passed to [showDialog],
+/// the documentation for which discusses how it is used.
 ///
 /// The [builder] parameter can be used to wrap the dialog widget
 /// to add inherited widgets like [Theme].
@@ -1136,10 +1133,12 @@ Future<DateTime> showDatePicker({
   Locale locale,
   TextDirection textDirection,
   TransitionBuilder builder,
+  bool useRootNavigator = true,
 }) async {
   assert(initialDate != null);
   assert(firstDate != null);
   assert(lastDate != null);
+  assert(useRootNavigator != null);
   assert(!initialDate.isBefore(firstDate), 'initialDate must be on or after firstDate');
   assert(!initialDate.isAfter(lastDate), 'initialDate must be on or before lastDate');
   assert(!firstDate.isAfter(lastDate), 'lastDate must be on or after firstDate');
@@ -1176,6 +1175,7 @@ Future<DateTime> showDatePicker({
 
   return await showDialog<DateTime>(
     context: context,
+    useRootNavigator: useRootNavigator,
     builder: (BuildContext context) {
       return builder == null ? child : builder(context, child);
     },
