@@ -9,6 +9,7 @@ import 'package:stream_channel/stream_channel.dart';
 
 import 'base/io.dart';
 import 'base/process.dart';
+import 'base/utils.dart';
 import 'convert.dart';
 import 'globals.dart';
 
@@ -24,7 +25,7 @@ const String _kData = 'data';
 class RecordingVMServiceChannel extends DelegatingStreamChannel<String> {
   RecordingVMServiceChannel(StreamChannel<String> delegate, Directory location)
       : super(delegate) {
-    addShutdownHook(() async {
+    addShutdownHook(() {
       // Sort the messages such that they are ordered
       // `[request1, response1, request2, response2, ...]`. This serves no
       // purpose other than to make the serialized format more human-readable.
@@ -32,7 +33,7 @@ class RecordingVMServiceChannel extends DelegatingStreamChannel<String> {
 
       final File file = _getManifest(location);
       final String json = const JsonEncoder.withIndent('  ').convert(_messages);
-      await file.writeAsString(json, flush: true);
+      file.writeAsStringSync(json, flush: true);
     }, ShutdownStage.SERIALIZE_RECORDING);
   }
 
@@ -57,14 +58,14 @@ abstract class _Message implements Comparable<_Message> {
 
   factory _Message.fromRecording(Map<String, dynamic> recordingData) {
     return recordingData[_kType] == _kRequest
-        ? _Request(recordingData[_kData])
-        : _Response(recordingData[_kData]);
+        ? _Request(castStringKeyedMap(recordingData[_kData]))
+        : _Response(castStringKeyedMap(recordingData[_kData]));
   }
 
   final String type;
   final Map<String, dynamic> data;
 
-  int get id => data[_kId];
+  int get id => data[_kId] as int;
 
   /// Allows [JsonEncoder] to properly encode objects of this type.
   Map<String, dynamic> toJson() {
@@ -94,13 +95,13 @@ abstract class _Message implements Comparable<_Message> {
 /// A VM service JSON-rpc request (sent to the VM).
 class _Request extends _Message {
   _Request(Map<String, dynamic> data) : super(_kRequest, data);
-  _Request.fromString(String data) : this(json.decoder.convert(data));
+  _Request.fromString(String data) : this(castStringKeyedMap(json.decode(data)));
 }
 
 /// A VM service JSON-rpc response (from the VM).
 class _Response extends _Message {
   _Response(Map<String, dynamic> data) : super(_kResponse, data);
-  _Response.fromString(String data) : this(json.decoder.convert(data));
+  _Response.fromString(String data) : this(castStringKeyedMap(json.decode(data)));
 }
 
 /// A matching request/response pair.
@@ -204,17 +205,19 @@ class ReplayVMServiceChannel extends StreamChannelMixin<String> {
   static Map<int, _Transaction> _loadTransactions(Directory location) {
     final File file = _getManifest(location);
     final String jsonData = file.readAsStringSync();
-    final Iterable<_Message> messages = json.decoder.convert(jsonData).map<_Message>(_toMessage);
+    final Iterable<_Message> messages = (json.decode(jsonData) as List<dynamic>)
+      .cast<Map<String, dynamic>>()
+      .map<_Message>(_toMessage);
     final Map<int, _Transaction> transactions = <int, _Transaction>{};
     for (_Message message in messages) {
       final _Transaction transaction =
           transactions.putIfAbsent(message.id, () => _Transaction());
       if (message.type == _kRequest) {
         assert(transaction.request == null);
-        transaction.request = message;
+        transaction.request = message as _Request;
       } else {
         assert(transaction.response == null);
-        transaction.response = message;
+        transaction.response = message as _Response;
       }
     }
     return transactions;
@@ -225,8 +228,9 @@ class ReplayVMServiceChannel extends StreamChannelMixin<String> {
   }
 
   void send(_Request request) {
-    if (!_transactions.containsKey(request.id))
+    if (!_transactions.containsKey(request.id)) {
       throw ArgumentError('No matching invocation found');
+    }
     final _Transaction transaction = _transactions.remove(request.id);
     // TODO(tvolkert): validate that `transaction.request` matches `request`
     if (transaction.response == null) {
@@ -237,8 +241,9 @@ class ReplayVMServiceChannel extends StreamChannelMixin<String> {
       exit(0);
     } else {
       _controller.add(json.encoder.convert(transaction.response.data));
-      if (_transactions.isEmpty)
+      if (_transactions.isEmpty) {
         _controller.close();
+      }
     }
   }
 
@@ -266,8 +271,9 @@ class _ReplaySink implements StreamSink<String> {
 
   @override
   void add(String data) {
-    if (_completer.isCompleted)
+    if (_completer.isCompleted) {
       throw StateError('Sink already closed');
+    }
     channel.send(_Request.fromString(data));
   }
 

@@ -87,7 +87,7 @@ class SshCommandRunner {
       if (sshConfigPath != null)
         ...<String>['-F', sshConfigPath],
       if (isIpV6Address(address))
-        ...<String>['-6', interface.isEmpty ? address : '$address%$interface']
+        ...<String>['-6', if (interface.isEmpty) address else '$address%$interface']
       else
         address,
       command,
@@ -99,6 +99,6 @@ class SshCommandRunner {
           'Command failed: $command\nstdout: ${result.stdout}\nstderr: ${result.stderr}');
     }
     _log.fine('SSH command stdout in brackets:[${result.stdout}]');
-    return result.stdout.split('\n');
+    return (result.stdout as String).split('\n');
   }
 }

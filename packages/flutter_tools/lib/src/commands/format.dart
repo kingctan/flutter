@@ -68,17 +68,18 @@ class FormatCommand extends FlutterCommand {
     final String dartfmt = sdkBinaryName('dartfmt');
     final List<String> command = <String>[
       dartfmt,
-      if (argResults['dry-run']) '-n',
-      if (argResults['machine']) '-m',
+      if (boolArg('dry-run')) '-n',
+      if (boolArg('machine')) '-m',
       if (argResults['line-length'] != null) '-l ${argResults['line-length']}',
-      if (!argResults['dry-run'] && !argResults['machine']) '-w',
-      if (argResults['set-exit-if-changed']) '--set-exit-if-changed',
+      if (!boolArg('dry-run') && !boolArg('machine')) '-w',
+      if (boolArg('set-exit-if-changed')) '--set-exit-if-changed',
       ...argResults.rest,
     ];
 
-    final int result = await runCommandAndStreamOutput(command);
-    if (result != 0)
+    final int result = await processUtils.stream(command);
+    if (result != 0) {
       throwToolExit('Formatting failed: $result', exitCode: result);
+    }
 
     return null;
   }

@@ -52,7 +52,10 @@ bool debugInstrumentationEnabled = false;
 ///    implicitly add any timeline events.
 Future<T> debugInstrumentAction<T>(String description, Future<T> action()) {
   bool instrument = false;
-  assert(() { instrument = debugInstrumentationEnabled; return true; }());
+  assert(() {
+    instrument = debugInstrumentationEnabled;
+    return true;
+  }());
   if (instrument) {
     final Stopwatch stopwatch = Stopwatch()..start();
     return action().whenComplete(() {
@@ -82,7 +85,7 @@ int debugDoublePrecision;
 
 /// Formats a double to have standard formatting.
 ///
-/// This behavior can be overriden by [debugDoublePrecision].
+/// This behavior can be overridden by [debugDoublePrecision].
 String debugFormatDouble(double value) {
   if (value == null) {
     return 'null';

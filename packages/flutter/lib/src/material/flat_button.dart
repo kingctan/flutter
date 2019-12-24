@@ -29,7 +29,7 @@ import 'theme_data.dart';
 /// interactive, with ink splashes, without also committing to these stylistic
 /// choices, consider using [InkWell] instead.
 ///
-/// If the [onPressed] callback is null, then the button will be disabled,
+/// If the [onPressed] and [onLongPress] callbacks are null, then this button will be disabled,
 /// will not react to touch, and will be colored as specified by
 /// the [disabledColor] property instead of the [color] property. If you are
 /// trying to change the button's [color] and it is not having any effect, check
@@ -102,6 +102,7 @@ class FlatButton extends MaterialButton {
   const FlatButton({
     Key key,
     @required VoidCallback onPressed,
+    VoidCallback onLongPress,
     ValueChanged<bool> onHighlightChanged,
     ButtonTextTheme textTheme,
     Color textColor,
@@ -115,15 +116,17 @@ class FlatButton extends MaterialButton {
     Brightness colorBrightness,
     EdgeInsetsGeometry padding,
     ShapeBorder shape,
-    Clip clipBehavior,
+    Clip clipBehavior = Clip.none,
     FocusNode focusNode,
     bool autofocus = false,
     MaterialTapTargetSize materialTapTargetSize,
     @required Widget child,
-  }) : assert(autofocus != null),
+  }) : assert(clipBehavior != null),
+       assert(autofocus != null),
        super(
          key: key,
          onPressed: onPressed,
+         onLongPress: onLongPress,
          onHighlightChanged: onHighlightChanged,
          textTheme: textTheme,
          textColor: textColor,
@@ -154,6 +157,7 @@ class FlatButton extends MaterialButton {
   factory FlatButton.icon({
     Key key,
     @required VoidCallback onPressed,
+    VoidCallback onLongPress,
     ValueChanged<bool> onHighlightChanged,
     ButtonTextTheme textTheme,
     Color textColor,
@@ -181,6 +185,7 @@ class FlatButton extends MaterialButton {
     final ButtonThemeData buttonTheme = ButtonTheme.of(context);
     return RawMaterialButton(
       onPressed: onPressed,
+      onLongPress: onLongPress,
       onHighlightChanged: onHighlightChanged,
       fillColor: buttonTheme.getFillColor(this),
       textStyle: theme.textTheme.button.copyWith(color: buttonTheme.getTextColor(this)),
@@ -196,7 +201,7 @@ class FlatButton extends MaterialButton {
       padding: buttonTheme.getPadding(this),
       constraints: buttonTheme.getConstraints(this),
       shape: buttonTheme.getShape(this),
-      clipBehavior: clipBehavior ?? Clip.none,
+      clipBehavior: clipBehavior,
       focusNode: focusNode,
       autofocus: autofocus,
       materialTapTargetSize: buttonTheme.getMaterialTapTargetSize(this),
@@ -206,7 +211,7 @@ class FlatButton extends MaterialButton {
   }
 }
 
-/// The type of of FlatButtons created with [FlatButton.icon].
+/// The type of FlatButtons created with [FlatButton.icon].
 ///
 /// This class only exists to give FlatButtons created with [FlatButton.icon]
 /// a distinct class for the sake of [ButtonTheme]. It can not be instantiated.
@@ -214,6 +219,7 @@ class _FlatButtonWithIcon extends FlatButton with MaterialButtonWithIconMixin {
   _FlatButtonWithIcon({
     Key key,
     @required VoidCallback onPressed,
+    VoidCallback onLongPress,
     ValueChanged<bool> onHighlightChanged,
     ButtonTextTheme textTheme,
     Color textColor,
@@ -227,7 +233,7 @@ class _FlatButtonWithIcon extends FlatButton with MaterialButtonWithIconMixin {
     Brightness colorBrightness,
     EdgeInsetsGeometry padding,
     ShapeBorder shape,
-    Clip clipBehavior,
+    Clip clipBehavior = Clip.none,
     FocusNode focusNode,
     bool autofocus = false,
     MaterialTapTargetSize materialTapTargetSize,
@@ -235,10 +241,12 @@ class _FlatButtonWithIcon extends FlatButton with MaterialButtonWithIconMixin {
     @required Widget label,
   }) : assert(icon != null),
        assert(label != null),
+       assert(clipBehavior != null),
        assert(autofocus != null),
        super(
          key: key,
          onPressed: onPressed,
+         onLongPress: onLongPress,
          onHighlightChanged: onHighlightChanged,
          textTheme: textTheme,
          textColor: textColor,

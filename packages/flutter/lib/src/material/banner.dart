@@ -17,7 +17,7 @@ import 'theme.dart';
 /// to be dismissed.
 ///
 /// Banners should be displayed at the top of the screen, below a top app bar.
-/// They are persistent and nonmodal, allowing the user to either ignore them or
+/// They are persistent and non-modal, allowing the user to either ignore them or
 /// interact with them at any time.
 ///
 /// The [actions] will be placed beside the [content] if there is only one.
@@ -118,11 +118,9 @@ class MaterialBanner extends StatelessWidget {
         ?? bannerTheme.padding
         ?? const EdgeInsetsDirectional.only(end: 16.0);
 
-    final Widget buttonBar = ButtonTheme.bar(
+    final Widget buttonBar = ButtonBar(
       layoutBehavior: ButtonBarLayoutBehavior.constrained,
-      child: ButtonBar(
-        children: actions,
-      ),
+      children: actions,
     );
 
     final Color backgroundColor = this.backgroundColor
@@ -145,7 +143,7 @@ class MaterialBanner extends StatelessWidget {
                     padding: leadingPadding,
                     child: leading,
                   ),
-                Flexible(
+                Expanded(
                   child: DefaultTextStyle(
                     style: textStyle,
                     child: content,

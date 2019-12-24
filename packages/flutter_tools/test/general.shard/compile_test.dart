@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'package:flutter_tools/src/base/common.dart';
 import 'package:flutter_tools/src/compile.dart';
 
 import '../src/common.dart';
@@ -19,6 +20,14 @@ void main() {
     expect(output.outputFilename, 'message');
   });
 
+  testUsingContext('StdOutHandler crash test', () async {
+    final StdoutHandler stdoutHandler = StdoutHandler();
+    final Future<CompilerOutput> output = stdoutHandler.compilerOutput.future;
+    stdoutHandler.handler('message with no result');
+
+    expect(output, throwsA(isInstanceOf<ToolExit>()));
+  });
+
   test('TargetModel values', () {
     expect(TargetModel('vm'), TargetModel.vm);
     expect(TargetModel.vm.toString(), 'vm');
@@ -28,6 +37,10 @@ void main() {
 
     expect(TargetModel('flutter_runner'), TargetModel.flutterRunner);
     expect(TargetModel.flutterRunner.toString(), 'flutter_runner');
+
+    expect(TargetModel('dartdevc'), TargetModel.dartdevc);
+    expect(TargetModel.dartdevc.toString(), 'dartdevc');
+
     expect(() => TargetModel('foobar'), throwsA(isInstanceOf<AssertionError>()));
   });
 }

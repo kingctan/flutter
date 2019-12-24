@@ -15,6 +15,8 @@ import 'package:flutter_tools/src/base/config.dart';
 import 'package:flutter_tools/src/base/file_system.dart';
 import 'package:flutter_tools/src/base/io.dart';
 import 'package:flutter_tools/src/base/platform.dart';
+import 'package:flutter_tools/src/base/process.dart';
+import 'package:flutter_tools/src/build_info.dart';
 import 'package:flutter_tools/src/device.dart';
 import 'package:flutter_tools/src/project.dart';
 import 'package:mockito/mockito.dart';
@@ -24,12 +26,162 @@ import '../../src/common.dart';
 import '../../src/context.dart';
 import '../../src/mocks.dart';
 
+class MockFile extends Mock implements File {
+  @override
+  bool existsSync() {
+    return true;
+  }
+
+  @override
+  String get path => '.';
+}
+
+class MockAndroidApk extends Mock implements AndroidApk {
+  @override
+  String get id => '0';
+
+  @override
+  File get file => MockFile();
+}
+
+class MockProcessUtils extends Mock implements ProcessUtils {
+  @override
+  Future<RunResult> run(
+      List<String> cmd, {
+        bool throwOnError = false,
+        RunResultChecker whiteListFailures,
+        String workingDirectory,
+        bool allowReentrantFlutter = false,
+        Map<String, String> environment,
+        Duration timeout,
+        int timeoutRetries = 0,
+      }) async {
+    if (cmd.contains('version')) {
+      return RunResult(ProcessResult(0, 0, 'Android Debug Bridge version 1.0.41', ''), cmd);
+    }
+    if (cmd.contains('android.intent.action.RUN')) {
+      _runCmd = cmd;
+    }
+    return RunResult(ProcessResult(0, 0, '', ''), cmd);
+  }
+
+  @override
+  Future<int> stream(
+      List<String> cmd, {
+        String workingDirectory,
+        bool allowReentrantFlutter = false,
+        String prefix = '',
+        bool trace = false,
+        RegExp filter,
+        StringConverter mapFunction,
+        Map<String, String> environment,
+      }) async {
+    return 0;
+  }
+
+  List<String> _runCmd;
+  List<String> get runCmd => _runCmd;
+}
+
+class MockAndroidSdkVersion extends Mock implements AndroidSdkVersion {}
+
 void main() {
   group('android_device', () {
     testUsingContext('stores the requested id', () {
       const String deviceId = '1234';
       final AndroidDevice device = AndroidDevice(deviceId);
       expect(device.id, deviceId);
+    });
+
+    group('startApp', () {
+      MockAndroidApk mockApk;
+      MockProcessManager mockProcessManager;
+      MockAndroidSdk mockAndroidSdk;
+      MockProcessUtils mockProcessUtils;
+
+      setUp(() {
+        mockApk = MockAndroidApk();
+        mockProcessManager = MockProcessManager();
+        mockAndroidSdk = MockAndroidSdk();
+        mockProcessUtils = MockProcessUtils();
+      });
+
+      testUsingContext('succeeds with --cache-sksl', () async {
+        const String deviceId = '1234';
+        final AndroidDevice device = AndroidDevice(deviceId, modelID: 'TestModel');
+
+        final Directory sdkDir = MockAndroidSdk.createSdkDirectory();
+        Config.instance.setValue('android-sdk', sdkDir.path);
+        final File adbExe = fs.file(getAdbPath(androidSdk));
+
+        when(mockAndroidSdk.licensesAvailable).thenReturn(true);
+        when(mockAndroidSdk.latestVersion).thenReturn(MockAndroidSdkVersion());
+
+        when(mockProcessManager.run(
+          <String>[adbExe.path, '-s', deviceId, 'shell', 'getprop'],
+          stdoutEncoding: latin1,
+          stderrEncoding: latin1,
+        )).thenAnswer((_) async {
+          return ProcessResult(0, 0, '[ro.build.version.sdk]: [24]', '');
+        });
+
+        final LaunchResult launchResult = await device.startApp(
+          mockApk,
+          prebuiltApplication: true,
+          debuggingOptions: DebuggingOptions.disabled(
+            const BuildInfo(BuildMode.release, null),
+            cacheSkSL: true,
+          ),
+          platformArgs: <String, dynamic>{},
+        );
+        expect(launchResult.started, isTrue);
+
+        final int cmdIndex = mockProcessUtils.runCmd.indexOf('cache-sksl');
+        expect(
+            mockProcessUtils.runCmd.sublist(cmdIndex - 1, cmdIndex + 2),
+            equals(<String>['--ez', 'cache-sksl', 'true']),
+        );
+      }, overrides: <Type, Generator>{
+        AndroidSdk: () => mockAndroidSdk,
+        FileSystem: () => MemoryFileSystem(),
+        ProcessManager: () => mockProcessManager,
+        ProcessUtils: () => mockProcessUtils,
+      });
+
+      testUsingContext('can run a release build on x64', () async {
+        const String deviceId = '1234';
+        final AndroidDevice device = AndroidDevice(deviceId, modelID: 'TestModel');
+
+        final Directory sdkDir = MockAndroidSdk.createSdkDirectory();
+        Config.instance.setValue('android-sdk', sdkDir.path);
+        final File adbExe = fs.file(getAdbPath(androidSdk));
+
+        when(mockAndroidSdk.licensesAvailable).thenReturn(true);
+        when(mockAndroidSdk.latestVersion).thenReturn(MockAndroidSdkVersion());
+
+        when(mockProcessManager.run(
+          <String>[adbExe.path, '-s', deviceId, 'shell', 'getprop'],
+          stdoutEncoding: latin1,
+          stderrEncoding: latin1,
+        )).thenAnswer((_) async {
+          return ProcessResult(0, 0, '[ro.build.version.sdk]: [24]\n[ro.product.cpu.abi]: [x86_64]', '');
+        });
+
+        final LaunchResult launchResult = await device.startApp(
+          mockApk,
+          prebuiltApplication: true,
+          debuggingOptions: DebuggingOptions.disabled(
+            const BuildInfo(BuildMode.release, null),
+          ),
+          platformArgs: <String, dynamic>{},
+        );
+        expect(launchResult.started, true);
+      }, overrides: <Type, Generator>{
+        AndroidSdk: () => mockAndroidSdk,
+        FileSystem: () => MemoryFileSystem(),
+        ProcessManager: () => mockProcessManager,
+        ProcessUtils: () => mockProcessUtils,
+      });
     });
   });
 
@@ -138,9 +290,11 @@ Use the 'android' tool to install them:
       hardware = 'goldfish';
       buildCharacteristics = 'unused';
       exitCode = -1;
-      when(mockProcessManager.run(argThat(contains('getprop')),
-          stderrEncoding: anyNamed('stderrEncoding'),
-          stdoutEncoding: anyNamed('stdoutEncoding'))).thenAnswer((_) {
+      when(mockProcessManager.run(
+        argThat(contains('getprop')),
+        stderrEncoding: anyNamed('stderrEncoding'),
+        stdoutEncoding: anyNamed('stdoutEncoding'),
+      )).thenAnswer((_) {
         final StringBuffer buf = StringBuffer()
           ..writeln('[ro.hardware]: [$hardware]')..writeln(
               '[ro.build.characteristics]: [$buildCharacteristics]');
@@ -206,6 +360,77 @@ Use the 'android' tool to install them:
     });
   });
 
+  group('ABI detection', () {
+    ProcessManager mockProcessManager;
+    String cpu;
+    String abilist;
+
+    setUp(() {
+      mockProcessManager = MockProcessManager();
+      cpu = 'unknown';
+      abilist = 'unknown';
+      when(mockProcessManager.run(
+        argThat(contains('getprop')),
+        stderrEncoding: anyNamed('stderrEncoding'),
+        stdoutEncoding: anyNamed('stdoutEncoding'),
+      )).thenAnswer((_) {
+        final StringBuffer buf = StringBuffer()
+          ..writeln('[ro.product.cpu.abi]: [$cpu]')
+          ..writeln('[ro.product.cpu.abilist]: [$abilist]');
+        final ProcessResult result = ProcessResult(1, 0, buf.toString(), '');
+        return Future<ProcessResult>.value(result);
+      });
+    });
+
+    testUsingContext('detects x64', () async {
+      cpu = 'x86_64';
+      final AndroidDevice device = AndroidDevice('test');
+
+      expect(await device.targetPlatform, TargetPlatform.android_x64);
+    }, overrides: <Type, Generator>{
+      ProcessManager: () => mockProcessManager
+    });
+
+    testUsingContext('detects x86', () async {
+      cpu = 'x86';
+      final AndroidDevice device = AndroidDevice('test');
+
+      expect(await device.targetPlatform, TargetPlatform.android_x86);
+    }, overrides: <Type, Generator>{
+      ProcessManager: () => mockProcessManager
+    });
+
+    testUsingContext('unknown device defaults to 32bit arm', () async {
+      cpu = '???';
+      final AndroidDevice device = AndroidDevice('test');
+
+      expect(await device.targetPlatform, TargetPlatform.android_arm);
+    }, overrides: <Type, Generator>{
+      ProcessManager: () => mockProcessManager
+    });
+
+    testUsingContext('detects 64 bit arm', () async {
+      cpu = 'arm64-v8a';
+      abilist = 'arm64-v8a,';
+      final AndroidDevice device = AndroidDevice('test');
+
+      // If both abi properties agree, we are 64 bit.
+      expect(await device.targetPlatform, TargetPlatform.android_arm64);
+    }, overrides: <Type, Generator>{
+      ProcessManager: () => mockProcessManager
+    });
+
+    testUsingContext('detects kindle fire ABI', () async {
+      cpu = 'arm64-v8a';
+      abilist = 'arm';
+      final AndroidDevice device = AndroidDevice('test');
+
+      // If one does not contain arm64, assume 32 bit.
+      expect(await device.targetPlatform, TargetPlatform.android_arm);
+    }, overrides: <Type, Generator>{
+      ProcessManager: () => mockProcessManager
+    });
+  });
 
   group('isLocalEmulator', () {
     final ProcessManager mockProcessManager = MockProcessManager();
@@ -215,9 +440,11 @@ Use the 'android' tool to install them:
     setUp(() {
       hardware = 'unknown';
       buildCharacteristics = 'unused';
-      when(mockProcessManager.run(argThat(contains('getprop')),
-          stderrEncoding: anyNamed('stderrEncoding'),
-          stdoutEncoding: anyNamed('stdoutEncoding'))).thenAnswer((_) {
+      when(mockProcessManager.run(
+        argThat(contains('getprop')),
+        stderrEncoding: anyNamed('stderrEncoding'),
+        stdoutEncoding: anyNamed('stdoutEncoding'),
+      )).thenAnswer((_) {
         final StringBuffer buf = StringBuffer()
           ..writeln('[ro.hardware]: [$hardware]')
           ..writeln('[ro.build.characteristics]: [$buildCharacteristics]');
@@ -228,6 +455,14 @@ Use the 'android' tool to install them:
 
     testUsingContext('knownPhysical', () async {
       hardware = 'samsungexynos7420';
+      final AndroidDevice device = AndroidDevice('test');
+      expect(await device.isLocalEmulator, false);
+    }, overrides: <Type, Generator>{
+      ProcessManager: () => mockProcessManager,
+    });
+
+    testUsingContext('knownPhysical Samsung SM G570M', () async {
+      hardware = 'samsungexynos7570';
       final AndroidDevice device = AndroidDevice('test');
       expect(await device.isLocalEmulator, false);
     }, overrides: <Type, Generator>{
@@ -276,6 +511,7 @@ flutter:
     expect(AndroidDevice('test').isSupportedForProject(flutterProject), true);
   }, overrides: <Type, Generator>{
     FileSystem: () => MemoryFileSystem(),
+    ProcessManager: () => FakeProcessManager.any(),
   });
 
   testUsingContext('isSupportedForProject is true with editable host app', () async {
@@ -287,6 +523,7 @@ flutter:
     expect(AndroidDevice('test').isSupportedForProject(flutterProject), true);
   }, overrides: <Type, Generator>{
     FileSystem: () => MemoryFileSystem(),
+    ProcessManager: () => FakeProcessManager.any(),
   });
 
   testUsingContext('isSupportedForProject is false with no host app and no module', () async {
@@ -297,6 +534,7 @@ flutter:
     expect(AndroidDevice('test').isSupportedForProject(flutterProject), false);
   }, overrides: <Type, Generator>{
     FileSystem: () => MemoryFileSystem(),
+    ProcessManager: () => FakeProcessManager.any(),
   });
 
   group('emulatorId', () {
@@ -312,9 +550,11 @@ flutter:
     setUp(() {
       hardware = 'goldfish'; // Known emulator
       socketWasCreated = false;
-      when(mockProcessManager.run(argThat(contains('getprop')),
-          stderrEncoding: anyNamed('stderrEncoding'),
-          stdoutEncoding: anyNamed('stdoutEncoding'))).thenAnswer((_) {
+      when(mockProcessManager.run(
+        argThat(contains('getprop')),
+        stderrEncoding: anyNamed('stderrEncoding'),
+        stdoutEncoding: anyNamed('stdoutEncoding'),
+      )).thenAnswer((_) {
         final StringBuffer buf = StringBuffer()
           ..writeln('[ro.hardware]: [$hardware]');
         final ProcessResult result = ProcessResult(1, 0, buf.toString(), '');

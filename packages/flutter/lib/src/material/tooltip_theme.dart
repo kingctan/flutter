@@ -213,7 +213,7 @@ class TooltipThemeData extends Diagnosticable {
 /// ),
 /// ```
 /// {@end-tool}
-class TooltipTheme extends InheritedWidget {
+class TooltipTheme extends InheritedTheme {
   /// Creates a tooltip theme that controls the configurations for
   /// [Tooltip].
   ///
@@ -237,8 +237,14 @@ class TooltipTheme extends InheritedWidget {
   /// TooltipThemeData theme = TooltipTheme.of(context);
   /// ```
   static TooltipThemeData of(BuildContext context) {
-    final TooltipTheme tooltipTheme = context.inheritFromWidgetOfExactType(TooltipTheme);
+    final TooltipTheme tooltipTheme = context.dependOnInheritedWidgetOfExactType<TooltipTheme>();
     return tooltipTheme?.data ?? Theme.of(context).tooltipTheme;
+  }
+
+  @override
+  Widget wrap(BuildContext context, Widget child) {
+    final TooltipTheme ancestorTheme = context.findAncestorWidgetOfExactType<TooltipTheme>();
+    return identical(this, ancestorTheme) ? child : TooltipTheme(data: data, child: child);
   }
 
   @override

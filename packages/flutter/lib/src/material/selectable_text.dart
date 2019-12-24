@@ -46,7 +46,7 @@ class _TextSpanEditingController extends TextEditingController {
 
 class _SelectableTextSelectionGestureDetectorBuilder extends TextSelectionGestureDetectorBuilder {
   _SelectableTextSelectionGestureDetectorBuilder({
-    @required _SelectableTextState state
+    @required _SelectableTextState state,
   }) : _state = state,
       super(delegate: state);
 
@@ -130,6 +130,8 @@ class _SelectableTextSelectionGestureDetectorBuilder extends TextSelectionGestur
 /// The [SelectableText] widget displays a string of text with a single style.
 /// The string might break across multiple lines or might all be displayed on
 /// the same line depending on the layout constraints.
+///
+/// {@youtube 560 315 https://www.youtube.com/watch?v=ZSU3ZXOs6hc}
 ///
 /// The [style] argument is optional. When omitted, the text will use the style
 /// from the closest enclosing [DefaultTextStyle]. If the given style's
@@ -374,7 +376,7 @@ class SelectableText extends StatefulWidget {
   /// {@macro flutter.widgets.edtiableText.scrollPhysics}
   final ScrollPhysics scrollPhysics;
 
-  /// {@macro flutter.dart:ui.text.TextWidthBasis}
+  /// {@macro flutter.painting.textPainter.textWidthBasis}
   final TextWidthBasis textWidthBasis;
 
   @override
@@ -440,7 +442,7 @@ class _SelectableTextState extends State<SelectableText> with AutomaticKeepAlive
       );
     }
     if (_effectiveFocusNode.hasFocus && _controller.selection.isCollapsed) {
-        _showSelectionHandles = false;
+      _showSelectionHandles = false;
     }
   }
 

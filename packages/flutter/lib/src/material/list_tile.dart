@@ -36,7 +36,7 @@ enum ListTileStyle {
 ///
 /// The [Drawer] widget specifies a tile theme for its children which sets
 /// [style] to [ListTileStyle.drawer].
-class ListTileTheme extends InheritedWidget {
+class ListTileTheme extends InheritedTheme {
   /// Creates a list tile theme that controls the color and style parameters for
   /// [ListTile]s.
   const ListTileTheme({
@@ -111,8 +111,22 @@ class ListTileTheme extends InheritedWidget {
   /// ListTileTheme theme = ListTileTheme.of(context);
   /// ```
   static ListTileTheme of(BuildContext context) {
-    final ListTileTheme result = context.inheritFromWidgetOfExactType(ListTileTheme);
+    final ListTileTheme result = context.dependOnInheritedWidgetOfExactType<ListTileTheme>();
     return result ?? const ListTileTheme();
+  }
+
+  @override
+  Widget wrap(BuildContext context, Widget child) {
+    final ListTileTheme ancestorTheme = context.findAncestorWidgetOfExactType<ListTileTheme>();
+    return identical(this, ancestorTheme) ? child : ListTileTheme(
+      dense: dense,
+      style: style,
+      selectedColor: selectedColor,
+      iconColor: iconColor,
+      textColor: textColor,
+      contentPadding: contentPadding,
+      child: child,
+    );
   }
 
   @override
@@ -150,6 +164,8 @@ enum ListTileControlAffinity {
 
 /// A single fixed-height row that typically contains some text as well as
 /// a leading or trailing icon.
+///
+/// {@youtube 560 315 https://www.youtube.com/watch?v=l8dj0yPBvgQ}
 ///
 /// A list tile contains one to three lines of text optionally flanked by icons or
 /// other widgets, such as check boxes. The icons (or other widgets) for the
@@ -424,7 +440,7 @@ enum ListTileControlAffinity {
 ///
 /// {@tool snippet --template=stateless_widget_scaffold}
 ///
-/// Here is an example of an article list item with multi-line titles and
+/// Here is an example of an article list item with multiline titles and
 /// subtitles. It utilizes [Row]s and [Column]s, as well as [Expanded] and
 /// [AspectRatio] widgets to organize its layout.
 ///
@@ -866,6 +882,7 @@ class ListTile extends StatelessWidget {
     return InkWell(
       onTap: enabled ? onTap : null,
       onLongPress: enabled ? onLongPress : null,
+      canRequestFocus: enabled,
       child: Semantics(
         selected: selected,
         enabled: enabled,

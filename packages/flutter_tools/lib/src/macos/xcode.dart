@@ -4,26 +4,54 @@
 
 import 'dart:async';
 
+import '../base/common.dart';
 import '../base/context.dart';
 import '../base/file_system.dart';
 import '../base/io.dart';
+import '../base/platform.dart';
 import '../base/process.dart';
-import '../base/process_manager.dart';
 import '../ios/xcodeproj.dart';
 
-const int kXcodeRequiredVersionMajor = 9;
-const int kXcodeRequiredVersionMinor = 0;
+const int kXcodeRequiredVersionMajor = 10;
+const int kXcodeRequiredVersionMinor = 2;
 
 Xcode get xcode => context.get<Xcode>();
 
+enum SdkType {
+  iPhone,
+  iPhoneSimulator,
+  macOS,
+}
+
+/// SDK name passed to `xcrun --sdk`. Corresponds to undocumented Xcode
+/// SUPPORTED_PLATFORMS values.
+///
+/// Usage: xcrun [options] <tool name> ... arguments ...
+/// ...
+/// --sdk <sdk name>            find the tool for the given SDK name
+String getNameForSdk(SdkType sdk) {
+  switch (sdk) {
+    case SdkType.iPhone:
+      return 'iphoneos';
+    case SdkType.iPhoneSimulator:
+      return 'iphonesimulator';
+    case SdkType.macOS:
+      return 'macosx';
+  }
+  assert(false);
+  return null;
+}
+
 class Xcode {
-  bool get isInstalledAndMeetsVersionCheck => isInstalled && isVersionSatisfactory;
+  bool get isInstalledAndMeetsVersionCheck => platform.isMacOS && isInstalled && isVersionSatisfactory;
 
   String _xcodeSelectPath;
   String get xcodeSelectPath {
     if (_xcodeSelectPath == null) {
       try {
-        _xcodeSelectPath = processManager.runSync(<String>['/usr/bin/xcode-select', '--print-path']).stdout.trim();
+        _xcodeSelectPath = processUtils.runSync(
+          <String>['/usr/bin/xcode-select', '--print-path'],
+        ).stdout.trim();
       } on ProcessException {
         // Ignored, return null below.
       } on ArgumentError {
@@ -34,8 +62,9 @@ class Xcode {
   }
 
   bool get isInstalled {
-    if (xcodeSelectPath == null || xcodeSelectPath.isEmpty)
+    if (xcodeSelectPath == null || xcodeSelectPath.isEmpty) {
       return false;
+    }
     return xcodeProjectInterpreter.isInstalled;
   }
 
@@ -50,13 +79,16 @@ class Xcode {
   bool get eulaSigned {
     if (_eulaSigned == null) {
       try {
-        final ProcessResult result = processManager.runSync(<String>['/usr/bin/xcrun', 'clang']);
-        if (result.stdout != null && result.stdout.contains('license'))
+        final RunResult result = processUtils.runSync(
+          <String>['/usr/bin/xcrun', 'clang'],
+        );
+        if (result.stdout != null && result.stdout.contains('license')) {
           _eulaSigned = false;
-        else if (result.stderr != null && result.stderr.contains('license'))
+        } else if (result.stderr != null && result.stderr.contains('license')) {
           _eulaSigned = false;
-        else
+        } else {
           _eulaSigned = true;
+        }
       } on ProcessException {
         _eulaSigned = false;
       }
@@ -72,7 +104,9 @@ class Xcode {
       try {
         // This command will error if additional components need to be installed in
         // xcode 9.2 and above.
-        final ProcessResult result = processManager.runSync(<String>['/usr/bin/xcrun', 'simctl', 'list']);
+        final RunResult result = processUtils.runSync(
+          <String>['/usr/bin/xcrun', 'simctl', 'list'],
+        );
         _isSimctlInstalled = result.stderr == null || result.stderr == '';
       } on ProcessException {
         _isSimctlInstalled = false;
@@ -82,38 +116,48 @@ class Xcode {
   }
 
   bool get isVersionSatisfactory {
-    if (!xcodeProjectInterpreter.isInstalled)
+    if (!xcodeProjectInterpreter.isInstalled) {
       return false;
-    if (majorVersion > kXcodeRequiredVersionMajor)
+    }
+    if (majorVersion > kXcodeRequiredVersionMajor) {
       return true;
-    if (majorVersion == kXcodeRequiredVersionMajor)
+    }
+    if (majorVersion == kXcodeRequiredVersionMajor) {
       return minorVersion >= kXcodeRequiredVersionMinor;
+    }
     return false;
   }
 
   Future<RunResult> cc(List<String> args) {
-    return runCheckedAsync(<String>['xcrun', 'cc', ...args]);
+    return processUtils.run(
+      <String>['xcrun', 'cc', ...args],
+      throwOnError: true,
+    );
   }
 
   Future<RunResult> clang(List<String> args) {
-    return runCheckedAsync(<String>['xcrun', 'clang', ...args]);
+    return processUtils.run(
+      <String>['xcrun', 'clang', ...args],
+      throwOnError: true,
+    );
   }
 
-  Future<RunResult> dsymutil(List<String> args) {
-    return runCheckedAsync(<String>['xcrun', 'dsymutil', ...args]);
-  }
-
-  Future<RunResult> strip(List<String> args) {
-    return runCheckedAsync(<String>['xcrun', 'strip', ...args]);
-  }
-
-  Future<RunResult> otool(List<String> args) {
-    return runCheckedAsync(<String>['xcrun', 'otool', ...args]);
+  Future<String> sdkLocation(SdkType sdk) async {
+    assert(sdk != null);
+    final RunResult runResult = await processUtils.run(
+      <String>['xcrun', '--sdk', getNameForSdk(sdk), '--show-sdk-path'],
+      throwOnError: true,
+    );
+    if (runResult.exitCode != 0) {
+      throwToolExit('Could not find iPhone SDK location: ${runResult.stderr}');
+    }
+    return runResult.stdout.trim();
   }
 
   String getSimulatorPath() {
-    if (xcodeSelectPath == null)
+    if (xcodeSelectPath == null) {
       return null;
+    }
     final List<String> searchPaths = <String>[
       fs.path.join(xcodeSelectPath, 'Applications', 'Simulator.app'),
     ];

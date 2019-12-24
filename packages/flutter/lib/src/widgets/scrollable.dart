@@ -9,6 +9,7 @@ import 'dart:ui';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/painting.dart';
 
 import 'basic.dart';
 import 'framework.dart';
@@ -87,6 +88,7 @@ class Scrollable extends StatefulWidget {
        assert(dragStartBehavior != null),
        assert(viewportBuilder != null),
        assert(excludeFromSemantics != null),
+       assert(semanticChildCount == null || semanticChildCount >= 0),
        super (key: key);
 
   /// The direction in which this widget scrolls.
@@ -228,7 +230,7 @@ class Scrollable extends StatefulWidget {
   /// ScrollableState scrollable = Scrollable.of(context);
   /// ```
   static ScrollableState of(BuildContext context) {
-    final _ScrollableScope widget = context.inheritFromWidgetOfExactType(_ScrollableScope);
+    final _ScrollableScope widget = context.dependOnInheritedWidgetOfExactType<_ScrollableScope>();
     return widget?.scrollable;
   }
 
@@ -239,6 +241,7 @@ class Scrollable extends StatefulWidget {
     double alignment = 0.0,
     Duration duration = Duration.zero,
     Curve curve = Curves.ease,
+    ScrollPositionAlignmentPolicy alignmentPolicy = ScrollPositionAlignmentPolicy.explicit,
   }) {
     final List<Future<void>> futures = <Future<void>>[];
 
@@ -249,6 +252,7 @@ class Scrollable extends StatefulWidget {
         alignment: alignment,
         duration: duration,
         curve: curve,
+        alignmentPolicy: alignmentPolicy,
       ));
       context = scrollable.context;
       scrollable = Scrollable.of(context);
@@ -528,9 +532,14 @@ class ScrollableState extends State<Scrollable> with TickerProviderStateMixin
   // Returns the offset that should result from applying [event] to the current
   // position, taking min/max scroll extent into account.
   double _targetScrollOffsetForPointerScroll(PointerScrollEvent event) {
-    final double delta = widget.axis == Axis.horizontal
+    double delta = widget.axis == Axis.horizontal
         ? event.scrollDelta.dx
         : event.scrollDelta.dy;
+
+    if (axisDirectionIsReversed(widget.axisDirection)) {
+      delta *= -1;
+    }
+
     return math.min(math.max(position.pixels + delta, position.minScrollExtent),
         position.maxScrollExtent);
   }
@@ -635,6 +644,7 @@ class _ScrollSemantics extends SingleChildRenderObjectWidget {
     @required this.semanticChildCount,
     Widget child,
   }) : assert(position != null),
+       assert(semanticChildCount == null || semanticChildCount >= 0),
        super(key: key, child: child);
 
   final ScrollPosition position;

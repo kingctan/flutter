@@ -20,10 +20,10 @@ import 'theme_data.dart';
 /// in long busy lists of content, or in wide spaces. Avoid using raised buttons
 /// on already-raised content such as dialogs or cards.
 ///
-/// If the [onPressed] callback is null, then the button will be disabled and by
+/// If [onPressed] and [onLongPress] callbacks are null, then the button will be disabled and by
 /// default will resemble a flat button in the [disabledColor]. If you are
 /// trying to change the button's [color] and it is not having any effect, check
-/// that you are passing a non-null [onPressed] handler.
+/// that you are passing a non-null [onPressed] or [onLongPress] callbacks.
 ///
 /// If you want an ink-splash effect for taps, but don't want to use a button,
 /// consider using [InkWell] directly.
@@ -108,6 +108,7 @@ class RaisedButton extends MaterialButton {
   const RaisedButton({
     Key key,
     @required VoidCallback onPressed,
+    VoidCallback onLongPress,
     ValueChanged<bool> onHighlightChanged,
     ButtonTextTheme textTheme,
     Color textColor,
@@ -126,7 +127,7 @@ class RaisedButton extends MaterialButton {
     double disabledElevation,
     EdgeInsetsGeometry padding,
     ShapeBorder shape,
-    Clip clipBehavior,
+    Clip clipBehavior = Clip.none,
     FocusNode focusNode,
     bool autofocus = false,
     MaterialTapTargetSize materialTapTargetSize,
@@ -138,9 +139,11 @@ class RaisedButton extends MaterialButton {
        assert(hoverElevation == null || hoverElevation >= 0.0),
        assert(highlightElevation == null || highlightElevation >= 0.0),
        assert(disabledElevation == null || disabledElevation >= 0.0),
+       assert(clipBehavior != null),
        super(
          key: key,
          onPressed: onPressed,
+         onLongPress: onLongPress,
          onHighlightChanged: onHighlightChanged,
          textTheme: textTheme,
          textColor: textColor,
@@ -178,6 +181,7 @@ class RaisedButton extends MaterialButton {
   factory RaisedButton.icon({
     Key key,
     @required VoidCallback onPressed,
+    VoidCallback onLongPress,
     ValueChanged<bool> onHighlightChanged,
     ButtonTextTheme textTheme,
     Color textColor,
@@ -208,8 +212,9 @@ class RaisedButton extends MaterialButton {
     final ButtonThemeData buttonTheme = ButtonTheme.of(context);
     return RawMaterialButton(
       onPressed: onPressed,
+      onLongPress: onLongPress,
       onHighlightChanged: onHighlightChanged,
-      clipBehavior: clipBehavior ?? Clip.none,
+      clipBehavior: clipBehavior,
       fillColor: buttonTheme.getFillColor(this),
       textStyle: theme.textTheme.button.copyWith(color: buttonTheme.getTextColor(this)),
       focusColor: buttonTheme.getFocusColor(this),
@@ -243,7 +248,7 @@ class RaisedButton extends MaterialButton {
   }
 }
 
-/// The type of of RaisedButtons created with [RaisedButton.icon].
+/// The type of RaisedButtons created with [RaisedButton.icon].
 ///
 /// This class only exists to give RaisedButtons created with [RaisedButton.icon]
 /// a distinct class for the sake of [ButtonTheme]. It can not be instantiated.
@@ -251,6 +256,7 @@ class _RaisedButtonWithIcon extends RaisedButton with MaterialButtonWithIconMixi
   _RaisedButtonWithIcon({
     Key key,
     @required VoidCallback onPressed,
+    VoidCallback onLongPress,
     ValueChanged<bool> onHighlightChanged,
     ButtonTextTheme textTheme,
     Color textColor,
@@ -276,12 +282,14 @@ class _RaisedButtonWithIcon extends RaisedButton with MaterialButtonWithIconMixi
   }) : assert(elevation == null || elevation >= 0.0),
        assert(highlightElevation == null || highlightElevation >= 0.0),
        assert(disabledElevation == null || disabledElevation >= 0.0),
+       assert(clipBehavior != null),
        assert(icon != null),
        assert(label != null),
        assert(autofocus != null),
        super(
          key: key,
          onPressed: onPressed,
+         onLongPress: onLongPress,
          onHighlightChanged: onHighlightChanged,
          textTheme: textTheme,
          textColor: textColor,

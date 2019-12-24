@@ -3,15 +3,29 @@
 // found in the LICENSE file.
 
 import '../convert.dart';
+import '../globals.dart';
 import 'context.dart';
 import 'file_system.dart';
-import 'platform.dart';
+import 'logger.dart';
+import 'utils.dart';
 
 class Config {
-  Config([File configFile]) {
-    _configFile = configFile ?? fs.file(fs.path.join(_userHomeDir(), '.flutter_settings'));
-    if (_configFile.existsSync())
-      _values = json.decode(_configFile.readAsStringSync());
+  Config([File configFile, Logger localLogger]) {
+    final Logger loggerInstance = localLogger ?? logger;
+    _configFile = configFile ?? fs.file(fs.path.join(userHomePath(), '.flutter_settings'));
+    if (_configFile.existsSync()) {
+      try {
+        _values = castStringKeyedMap(json.decode(_configFile.readAsStringSync()));
+      } on FormatException {
+        loggerInstance
+          ..printError('Failed to decode preferences in ${_configFile.path}.')
+          ..printError(
+              'You may need to reapply any previously saved configuration '
+              'with the "flutter config" command.',
+          );
+        _configFile.deleteSync();
+      }
+    }
   }
 
   static Config get instance => context.get<Config>();
@@ -42,9 +56,4 @@ class Config {
     json = '$json\n';
     _configFile.writeAsStringSync(json);
   }
-}
-
-String _userHomeDir() {
-  final String envKey = platform.operatingSystem == 'windows' ? 'APPDATA' : 'HOME';
-  return platform.environment[envKey] ?? '.';
 }
